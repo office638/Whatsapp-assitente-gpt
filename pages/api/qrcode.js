@@ -1,82 +1,62 @@
-import chromium from 'chrome-aws-lambda';
-import puppeteer from 'puppeteer-core';
-import { Client } from 'whatsapp-web.js';
-import { 
-  getClient, getQrCodeData, getIsConnected, 
-  setClient, setQrCodeData, setIsConnected 
-} from './shared';
+import { getQRCode, getState, initializeClient } from './shared';
 
 export default async function handler(req, res) {
   try {
-    // Se já tiver um cliente conectado, retorne o status
-    if (getIsConnected()) {
-      return res.status(200).json({ 
+    // Verifica se o cliente já está inicializado, caso contrário inicia
+    const state = getState();
+    
+    if (!state.isInitialized && !state.isInitializing) {
+      console.log("Inicializando cliente WhatsApp para obter QR code...");
+      await initializeClient();
+    }
+    
+    // Se já está conectado, retorna essa informação
+    if (state.isConnected) {
+      return res.status(200).json({
         isConnected: true,
-        message: 'WhatsApp already connected'
+        message: 'Cliente WhatsApp já está conectado'
       });
     }
     
-    // Se já tiver um QR code gerado, retorne-o
-    if (getQrCodeData()) {
-      return res.status(200).json({ 
-        qrcode: getQrCodeData(),
-        isConnected: false 
+    // Obtém o QR code atual
+    const qrCodeData = getQRCode();
+    
+    if (qrCodeData) {
+      console.log("QR code encontrado, retornando para o cliente...");
+      return res.status(200).json({
+        qrcode: qrCodeData,
+        isConnected: false,
+        lastUpdate: state.lastQRTimestamp,
+      });
+    } else {
+      // Se não temos QR code ainda, verifique se está inicializando
+      if (state.isInitializing) {
+        return res.status(202).json({
+          message: 'Cliente WhatsApp está inicializando, aguarde um momento para o QR code aparecer',
+          isConnected: false,
+          isInitializing: true
+        });
+      }
+      
+      // Se não está inicializando nem temos QR code, provavelmente houve um erro
+      if (state.lastError) {
+        return res.status(500).json({
+          error: 'Falha ao gerar QR code',
+          message: state.lastError,
+          isConnected: false
+        });
+      }
+      
+      // Caso genérico quando não temos QR code ainda
+      return res.status(404).json({
+        message: 'QR code ainda não disponível, aguarde um momento e tente novamente',
+        isConnected: false
       });
     }
-    
-    // Inicializa o browser com o chrome-aws-lambda
-    const browser = await puppeteer.launch({
-      args: chromium.args,
-      executablePath: await chromium.executablePath,
-      headless: true,
-    });
-    
-    // Configura o cliente WhatsApp
-    const whatsappClient = new Client({ 
-      puppeteer: {
-        browser,
-        args: chromium.args,
-      } 
-    });
-    
-    // Armazena o cliente no estado compartilhado
-    setClient(whatsappClient);
-    
-    // Hook para capturar o QR code
-    whatsappClient.on('qr', (qr) => {
-      console.log('QR Code recebido', qr);
-      setQrCodeData(qr);
-    });
-    
-    // Hook para detectar conexão bem-sucedida
-    whatsappClient.on('ready', () => {
-      console.log('Cliente WhatsApp está pronto!');
-      setIsConnected(true);
-      setQrCodeData(null);
-    });
-    
-    // Hook para detectar desconexão
-    whatsappClient.on('disconnected', () => {
-      console.log('Cliente WhatsApp desconectado');
-      setIsConnected(false);
-      setQrCodeData(null);
-    });
-    
-    // Inicializa o cliente WhatsApp
-    await whatsappClient.initialize();
-    
-    // Aguarda um tempo para o QR code ser gerado
-    await new Promise(resolve => setTimeout(resolve, 5000));
-    
-    // Retorna o QR code para o cliente
-    return res.status(200).json({ 
-      qrcode: getQrCodeData(),
-      isConnected: getIsConnected()
-    });
   } catch (error) {
-    console.error('Erro ao gerar QR code:', error);
-    return res.status(500).json({ 
-      error: 'Falha ao gerar QR code',
+    console.error('Erro ao processar solicitação de QR code:', error);
+    return res.status(500).json({
+      error: 'Internal Server Error',
       message: error.message
     });
   }

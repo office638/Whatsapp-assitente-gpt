@@ -1,54 +1,59 @@
-import { getClient, getIsConnected } from './shared';
+import { getState, initializeClient } from './shared';
 
 export default async function handler(req, res) {
   try {
-    const client = getClient();
-    // Verificar se o cliente está conectado
-    if (!getIsConnected() || !client) {
-      return res.status(400).json({ 
-        success: false,
-        error: 'Cliente WhatsApp não está conectado' 
-      });
-    }
-    
-    // Verificar se o método é POST
     if (req.method !== 'POST') {
       return res.status(405).json({ 
-        success: false,
-        error: 'Método não permitido' 
+        error: 'Method not allowed', 
+        message: 'Apenas métodos POST são permitidos'
       });
     }
-    
-    // Extrair dados do corpo da requisição
+
     const { phoneNumber, message } = req.body;
     
-    // Validar dados
     if (!phoneNumber || !message) {
-      return res.status(400).json({ 
-        success: false,
-        error: 'Número de telefone e mensagem são obrigatórios' 
+      return res.status(400).json({
+        error: 'Bad request',
+        message: 'Os campos phoneNumber e message são obrigatórios'
       });
     }
+
+    // Verificar se o cliente está conectado
+    const state = getState();
     
-    // Formatar número de telefone se necessário
+    if (!state.isConnected) {
+      return res.status(403).json({
+        error: 'Not connected',
+        message: 'O cliente WhatsApp não está conectado'
+      });
+    }
+
+    // Tenta inicializar se ainda não estiver inicializado
+    if (!state.isInitialized) {
+      await initializeClient();
+    }
+
+    // Formata o número de telefone para o padrão do WhatsApp (se necessário)
     const formattedNumber = phoneNumber.includes('@c.us') 
       ? phoneNumber 
       : `${phoneNumber.replace(/\D/g, '')}@c.us`;
     
-    // Enviar mensagem
-    await client.sendMessage(formattedNumber, message);
-    
+    // Envia a mensagem usando o cliente do WhatsApp
+    // (Assumindo que state.client está corretamente definido em shared.js)
+    await state.client.sendMessage(formattedNumber, message);
+
     return res.status(200).json({
       success: true,
       phoneNumber: formattedNumber,
-      timestamp: Date.now()
+      message,
+      timestamp: new Date().toISOString()
     });
   } catch (error) {
-    console.error('Erro ao enviar mensagem:', error);
-    return res.status(500).json({ 
-      success: false,
-      error: 'Falha ao enviar mensagem',
-      message: error.message
+    console.error('Error sending message:', error);
+    return res.status(500).json({
+      error: 'Failed to send message',
+      message: error.message,
+      timestamp: new Date().toISOString()
     });
   }
 }
