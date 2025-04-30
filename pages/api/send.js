@@ -1,9 +1,10 @@
-import { client, isConnected } from './shared';
+import { getClient, getIsConnected } from './shared';
 
 export default async function handler(req, res) {
   try {
+    const client = getClient();
     // Verificar se o cliente está conectado
-    if (!isConnected || !client) {
+    if (!getIsConnected() || !client) {
       return res.status(400).json({ 
         success: false,
         error: 'Cliente WhatsApp não está conectado' 

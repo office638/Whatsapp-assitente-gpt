@@ -1,7 +1,8 @@
-import { messages } from './shared';
+import { getMessages } from './shared';
 
 export default async function handler(req, res) {
   try {
+    const messages = getMessages();
     let responseMessages = messages;
     
     // Filtrar mensagens desde timestamp especificado, se fornecido

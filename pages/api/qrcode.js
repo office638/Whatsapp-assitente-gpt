@@ -1,12 +1,15 @@
 import chromium from 'chrome-aws-lambda';
 import puppeteer from 'puppeteer-core';
 import { Client } from 'whatsapp-web.js';
-import { client, qrCodeData, isConnected, addMessage } from './shared';
+import { 
+  getClient, getQrCodeData, getIsConnected, 
+  setClient, setQrCodeData, setIsConnected 
+} from './shared';
 
 export default async function handler(req, res) {
   try {
     // Se já tiver um cliente conectado, retorne o status
-    if (isConnected) {
+    if (getIsConnected()) {
       return res.status(200).json({ 
         isConnected: true,
         message: 'WhatsApp already connected'
@@ -14,9 +17,9 @@ export default async function handler(req, res) {
     }
     
     // Se já tiver um QR code gerado, retorne-o
-    if (qrCodeData) {
+    if (getQrCodeData()) {
       return res.status(200).json({ 
-        qrcode: qrCodeData,
+        qrcode: getQrCodeData(),
         isConnected: false 
       });
     }
@@ -29,43 +32,46 @@ export default async function handler(req, res) {
     });
     
     // Configura o cliente WhatsApp
-    client = new Client({ 
+    const whatsappClient = new Client({ 
       puppeteer: {
         browser,
         args: chromium.args,
       } 
     });
     
+    // Armazena o cliente no estado compartilhado
+    setClient(whatsappClient);
+    
     // Hook para capturar o QR code
-    client.on('qr', (qr) => {
+    whatsappClient.on('qr', (qr) => {
       console.log('QR Code recebido', qr);
-      qrCodeData = qr;
+      setQrCodeData(qr);
     });
     
     // Hook para detectar conexão bem-sucedida
-    client.on('ready', () => {
+    whatsappClient.on('ready', () => {
       console.log('Cliente WhatsApp está pronto!');
-      isConnected = true;
-      qrCodeData = null;
+      setIsConnected(true);
+      setQrCodeData(null);
     });
     
     // Hook para detectar desconexão
-    client.on('disconnected', () => {
+    whatsappClient.on('disconnected', () => {
       console.log('Cliente WhatsApp desconectado');
-      isConnected = false;
-      qrCodeData = null;
+      setIsConnected(false);
+      setQrCodeData(null);
     });
     
     // Inicializa o cliente WhatsApp
-    await client.initialize();
+    await whatsappClient.initialize();
     
     // Aguarda um tempo para o QR code ser gerado
     await new Promise(resolve => setTimeout(resolve, 5000));
     
     // Retorna o QR code para o cliente
     return res.status(200).json({ 
-      qrcode: qrCodeData,
-      isConnected: false
+      qrcode: getQrCodeData(),
+      isConnected: getIsConnected()
     });
   } catch (error) {
     console.error('Erro ao gerar QR code:', error);

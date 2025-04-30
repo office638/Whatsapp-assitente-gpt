@@ -1,10 +1,10 @@
 // Compartilha o mesmo estado do cliente com o endpoint qrcode.js
-import { client, isConnected } from './shared';
+import { getIsConnected } from './shared';
 
 export default async function handler(req, res) {
   try {
     return res.status(200).json({
-      isConnected: isConnected,
+      isConnected: getIsConnected(),
       timestamp: new Date().toISOString()
     });
   } catch (error) {

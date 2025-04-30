@@ -1,9 +1,10 @@
-import { client, isConnected } from './shared';
+import { getClient, getIsConnected, setIsConnected } from './shared';
 
 export default async function handler(req, res) {
   try {
+    const client = getClient();
     // Verificar se o cliente está conectado
-    if (!isConnected || !client) {
+    if (!getIsConnected() || !client) {
       return res.status(200).json({ 
         success: true,
         message: 'Cliente já estava desconectado'
@@ -14,7 +15,7 @@ export default async function handler(req, res) {
     await client.destroy();
     
     // Atualizar estado
-    isConnected = false;
+    setIsConnected(false);
     
     return res.status(200).json({
       success: true,
