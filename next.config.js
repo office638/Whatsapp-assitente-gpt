@@ -5,7 +5,7 @@ const nextConfig = {
   serverRuntimeConfig: {
     maxDuration: 60, // 60 segundos
   },
-  // Evitar warnings para chrome-aws-lambda
+  // Evitar warnings para chrome-aws-lambda e transpilar dependências
   webpack: (config, { isServer }) => {
     if (isServer) {
       config.externals.push({ 
@@ -13,6 +13,13 @@ const nextConfig = {
         'chrome-aws-lambda': 'chrome-aws-lambda',
       });
     }
+
+    // Transpilar whatsapp-web.js para evitar problemas de compatibilidade
+    config.module.rules.push({
+      test: /node_modules[\/\\](whatsapp-web.js|puppeteer-core|chrome-aws-lambda)[\/\\].+\.js$/,
+      use: { loader: 'babel-loader' }
+    });
+
     return config;
   },
 };
